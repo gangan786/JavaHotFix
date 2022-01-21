@@ -1,5 +1,6 @@
 package com.lfls.hotfix.transfer;
 
+import com.lfls.hotfix.enums.DomainSocketAddressEnum;
 import com.lfls.hotfix.enums.ServerStatus;
 import com.lfls.hotfix.server.Server;
 import com.lfls.hotfix.server.ServerReadHandler;
@@ -35,6 +36,9 @@ public class TransferServer {
     private EventLoopGroup bossGroup = new EpollEventLoopGroup(3);
     private EventLoopGroup workerGroup = new EpollEventLoopGroup();
 
+    /**
+     * 从老者迁移过来的新channel_id --> 新EpollSocketChannel
+     */
     private final Map<String, Channel> transferChannels = new ConcurrentHashMap<>();
 
     private ChannelFuture listenerChannelFuture;
@@ -49,6 +53,12 @@ public class TransferServer {
         return server;
     }
 
+    /**
+     * 新者开启三个通道准备接受连接信息
+     * /tmp/transfer-listener.sock
+     * /tmp/transfer-fd.sock
+     * /tmp/transfer-data.sock
+     */
     public void start(){
 
         Thread listenerServer = new Thread(() -> {
@@ -97,10 +107,15 @@ public class TransferServer {
                                         Method initMethod = serverBootstrap.getClass().getDeclaredMethod("init", Channel.class);
                                         initMethod.setAccessible(true);
                                         initMethod.invoke(serverBootstrap, serverSocketChannel);
-
+                                        /*
+                                        完成监听端口的迁移
+                                         */
                                         Server.getInstance().registerListener(serverSocketChannel).addListener(future -> {
                                             if (future.isSuccess()){
                                                 //注册成功以后进行响应
+                                                /*
+                                                通知老者已经完成监听端口迁移
+                                                 */
                                                 ctx.writeAndFlush(Unpooled.copyInt(1)).addListener(future1 -> {
                                                     if (!future1.isSuccess()){
                                                         future1.cause().printStackTrace();
@@ -116,7 +131,7 @@ public class TransferServer {
                             }
                         })
                         .childOption(EpollChannelOption.DOMAIN_SOCKET_READ_MODE, DomainSocketReadMode.FILE_DESCRIPTORS);
-                SocketAddress s = new DomainSocketAddress("/tmp/transfer-listener.sock");
+                SocketAddress s = new DomainSocketAddress(DomainSocketAddressEnum.TRANSFER_LISTENER.path());
                 listenerChannelFuture = b.bind(s).sync();
             }catch (Exception e){
                 e.printStackTrace();
@@ -162,7 +177,16 @@ public class TransferServer {
                                     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
                                         //给收到的FD构建新的Channel
                                         FileDescriptor fd = (FileDescriptor) msg;
+                                        /*
+                                        这个新构建的channel怎么绑定Service？
+                                        新构建的channel在收到并处理老连接的存量数据后
+                                        就会注册到 workerGroup --> EpollEventLoopGroup
+                                         */
                                         EpollSocketChannel socketChannel = new EpollSocketChannel(fd.intValue());
+                                        /*
+                                           ServerReadHandler 作用是啥？
+                                           应该是用于处理长连接的业务处理
+                                         */
                                         socketChannel.pipeline().addLast("decode", new ServerReadHandler("transfer server"));
                                         socketChannel.pipeline().addLast(new ChannelOutboundHandlerAdapter(){
                                             @Override
@@ -191,7 +215,7 @@ public class TransferServer {
                             }
                         })
                         .childOption(EpollChannelOption.DOMAIN_SOCKET_READ_MODE, DomainSocketReadMode.FILE_DESCRIPTORS);
-                SocketAddress s = new DomainSocketAddress("/tmp/transfer-fd.sock");
+                SocketAddress s = new DomainSocketAddress(DomainSocketAddressEnum.TRANSFER_FD.path());
                 fdChannelFuture = b.bind(s).sync();
             }catch (Exception e){
                 e.printStackTrace();
@@ -227,10 +251,13 @@ public class TransferServer {
 
                                     @Override
                                     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                                        /*
+                                        当连接表的非活跃时
+                                        说明该连接的剩余数据已经完成迁移
+                                         */
                                         if (transferChannelCount.incrementAndGet() == transferChannels.size()){
                                             transferChannels.clear();
                                             Server.getInstance().changeStatus(ServerStatus.NORMAL);
-//                                            shutDown();
                                         }
                                     }
 
@@ -243,7 +270,7 @@ public class TransferServer {
                                 });
                             }
                         });
-                SocketAddress s = new DomainSocketAddress("/tmp/transfer-data.sock");
+                SocketAddress s = new DomainSocketAddress(DomainSocketAddressEnum.TRANSFER_DATA.path());
                 dataChannelFuture = b.bind(s).sync();
             }catch (Exception e){
                 e.printStackTrace();
@@ -266,7 +293,13 @@ public class TransferServer {
         return transferChannels.get(channelId);
     }
 
-    private AtomicInteger shutDown = new AtomicInteger(3);
+    /**
+     * 作为监听下面三个domainSocket的三个线程的同步器
+     * TRANSFER_LISTENER("/tmp/transfer-listener.sock"),
+     * TRANSFER_FD("/tmp/transfer-fd.sock"),
+     * TRANSFER_DATA("/tmp/transfer-data.sock")
+     */
+    private AtomicInteger shutDownCount = new AtomicInteger(3);
 
     public boolean closeEvent(Object evt, ChannelFuture future){
         if (evt instanceof IdleStateEvent){
@@ -278,7 +311,12 @@ public class TransferServer {
                 future.channel().close().addListener(f -> {
                     if (f.isSuccess()){
                         if (future == fdChannelFuture || future == dataChannelFuture || future == listenerChannelFuture){
-                            if (shutDown.decrementAndGet() == 0){
+                            if (shutDownCount.decrementAndGet() == 0){
+                                /*
+                                三种类型数据迁移完成
+                                启动监听/tmp/hotfix.sock
+                                为下一次更新做好准备
+                                 */
                                 Server.getInstance().startHotFixServer();
                             }
                         }

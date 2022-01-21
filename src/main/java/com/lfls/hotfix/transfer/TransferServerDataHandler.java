@@ -36,6 +36,9 @@ public class TransferServerDataHandler extends ByteToMessageDecoder {
             in.skipBytes(channelIdLength);
 
             int dataLength = in.readInt();
+            /*
+            通过老者传过来的参数中获取新EpollSocketChannel
+             */
             Channel channel = TransferServer.getInstance().getChannelById(newChannelId);
 
             ByteBuf remainData = channel.alloc().buffer(dataLength);
@@ -72,6 +75,9 @@ public class TransferServerDataHandler extends ByteToMessageDecoder {
 //                    }
                 });
             }else {
+                /*
+                这里的作用是什么？
+                 */
                 if (channel.isRegistered()){
                     //处理遗留的写数据
                     channel.writeAndFlush(remainData);

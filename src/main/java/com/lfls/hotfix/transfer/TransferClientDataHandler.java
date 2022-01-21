@@ -13,25 +13,29 @@ import java.nio.charset.StandardCharsets;
 /**
  * @author lingfenglangshao
  * @since 28/01/2020
+ * 用于传输老连接剩余数据
  */
 public class TransferClientDataHandler extends ChannelInboundHandlerAdapter {
 
-    private Channel channel;
+    private Channel oldChannel;
 
-    public TransferClientDataHandler(Channel channel){
-        this.channel = channel;
+    public TransferClientDataHandler(Channel oldChannel){
+        this.oldChannel = oldChannel;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        Server.getInstance().addTransferDataChannel(channel.id().asLongText(), ctx.channel());
-        String newChannelId = Server.getInstance().getNewChannelIdByOldChannelId(channel.id().asLongText());
+        /*
+        将oldChannelId与用于传输剩余数据的Channel做映射
+         */
+        Server.getInstance().addTransferDataChannel(oldChannel.id().asLongText(), ctx.channel());
+        String newChannelId = Server.getInstance().getNewChannelIdByOldChannelId(oldChannel.id().asLongText());
         ByteBuf newChannelIdBuf = Unpooled.copiedBuffer(newChannelId, StandardCharsets.UTF_8);
         //先注销，注销以后该channel上面不再读取任何数据，但写数据不影响
-        channel.deregister().addListener(future -> {
+        oldChannel.deregister().addListener(future -> {
             if (future.isSuccess()){
                 //发送读余量数据
-                ByteBuf remain = ((ServerReadHandler) channel.pipeline().get("decode")).getRemainData();
+                ByteBuf remain = ((ServerReadHandler) oldChannel.pipeline().get("decode")).getRemainData();
                 ByteBuf readRemain = remain.retainedSlice();
                 //1: read/write
                 //4: newChannelId length
@@ -49,7 +53,10 @@ public class TransferClientDataHandler extends ChannelInboundHandlerAdapter {
 
                 ctx.writeAndFlush(buffer).addListener(future1 -> {
                     if (future1.isSuccess()){
-                        channel.close().addListener(future2 -> {
+                        /*
+                        剩余数据发送完成后，close oldChannel
+                         */
+                        oldChannel.close().addListener(future2 -> {
                             if (!future2.isSuccess()){
                                 future2.cause().printStackTrace();
                             }
@@ -59,6 +66,9 @@ public class TransferClientDataHandler extends ChannelInboundHandlerAdapter {
                     }
                 });
             }else {
+                /*
+                老者oldChannel注销失败
+                 */
                 future.cause().printStackTrace();
             }
         });

@@ -23,6 +23,11 @@ public class ServerReadHandler extends ByteToMessageDecoder {
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         //迁移过来的连接不用再执行active
         System.out.println(name + " connection active!");
+        /*
+        业务服务器每次接受到新请求的时候
+        将他添加到channelGroup
+        用作业务连接迁移的数据源
+         */
         Server.getInstance().addChannel(ctx.channel());
     }
 
