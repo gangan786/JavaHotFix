@@ -21,7 +21,7 @@ public class ClientReadHandler extends ByteToMessageDecoder {
             while (true){
                 try {
                     count++;
-                    System.out.println("request:" + count);
+                    //System.out.println("request:" + count);
                     ctx.channel().write(String.valueOf(count));
                 }catch (Exception e){
                     e.printStackTrace();
@@ -42,7 +42,7 @@ public class ClientReadHandler extends ByteToMessageDecoder {
                 in.skipBytes(4);
                 ByteBuf remain = ctx.alloc().buffer(length);
                 in.readBytes(remain);
-                System.out.println(remain.toString(StandardCharsets.UTF_8));
+                System.out.println("收到信息 --> "+remain.toString(StandardCharsets.UTF_8));
                 //release
                 out.add(remain);
             }

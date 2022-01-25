@@ -39,7 +39,7 @@ public class ServerReadHandler extends ByteToMessageDecoder {
                 in.skipBytes(4);
                 ByteBuf remain = ctx.alloc().buffer(length);
                 in.readBytes(remain);
-                ctx.channel().write(name + ":" + remain.toString(StandardCharsets.UTF_8));
+                ctx.channel().write("服务器回写："+name + ":" + remain.toString(StandardCharsets.UTF_8));
                 out.add(remain);
             }
         }

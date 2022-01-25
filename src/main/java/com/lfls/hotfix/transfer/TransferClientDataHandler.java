@@ -57,8 +57,10 @@ public class TransferClientDataHandler extends ChannelInboundHandlerAdapter {
                         剩余数据发送完成后，close oldChannel
                          */
                         oldChannel.close().addListener(future2 -> {
-                            if (!future2.isSuccess()){
+                            if (!future2.isSuccess()) {
                                 future2.cause().printStackTrace();
+                            } else {
+                                System.out.println("关闭老者的channel:" + oldChannel.id().asLongText() + " 成功");
                             }
                         });
                     }else {

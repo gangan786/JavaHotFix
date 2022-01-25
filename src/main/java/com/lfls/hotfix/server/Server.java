@@ -77,7 +77,7 @@ public class Server {
             //启动监听
             ServerBootstrap b = getServerBootstrapWithoutChannel();
             b.channel(EpollServerSocketChannel.class);
-
+            System.out.println("8989服务启动");
             serverChannelFuture = b.bind(8989).sync();
         }
     }
@@ -136,6 +136,7 @@ public class Server {
                                             }
                                         }else {
                                             //单纯写失败
+                                            System.out.println("业务服务写失败，context：" + buf);
                                             buf.release();
                                         }
                                     }
@@ -143,6 +144,7 @@ public class Server {
                             }
                         });
                         ch.pipeline().addLast(new ServerWriteHandler());
+                        System.out.println("连接初始化完成：" + ch.id());
                     }
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
@@ -169,6 +171,7 @@ public class Server {
                             /tmp/transfer-fd.sock
                             /tmp/transfer-data.sock
                              */
+                            System.out.println("新者发现老者，开启线程准备接收");
                             TransferServer.getInstance().start();
 
                             ByteBuf buf = ctx.alloc().buffer(4);
@@ -177,11 +180,14 @@ public class Server {
                             新者发现老者正在运行，于是写了1作为标志
                             以通知老者开始迁移listenerFd、socketFd、剩余数据
                              */
+                            System.out.println("新者准备完成，通知老者开始迁移");
                             ctx.writeAndFlush(buf).addListener(future -> {
                                 if (future.isSuccess()){
                                     hotFixChannelFuture.channel().close().addListener(future1 -> {
                                         if (!future1.isSuccess()){
                                             future1.cause().printStackTrace();
+                                        }else {
+                                            System.out.println("新者通知成功");
                                         }
                                     });
                                 }else {
@@ -218,6 +224,8 @@ public class Server {
                                     /*
                                     老者接收到迁移信号：1，开始迁移连接信息
                                      */
+                                    System.out.println("老者接收到迁移信号：1，开始迁移连接信息");
+                                    status = ServerStatus.HOT_FIX;
                                     startListenerTransferTask();
                                 }
                             }
@@ -228,6 +236,7 @@ public class Server {
                 e.printStackTrace();
             }
         }).start();
+        System.out.println("启动监听hot-fix");
     }
 
     private final ExecutorService transferExecutors = Executors.newFixedThreadPool(10);
@@ -245,6 +254,7 @@ public class Server {
                                 在该连接建立完成的时候，
                                 会将服务器channel对应的文件描述符发给：/tmp/transfer-listener.sock的接收方
                                  */
+                                System.out.println("老者开始迁移listener");
                                 ctx.writeAndFlush(((EpollServerSocketChannel)serverChannelFuture.channel()).fd()).addListener(future -> {
                                     if (!future.isSuccess()){
                                         future.cause().printStackTrace();
@@ -260,6 +270,7 @@ public class Server {
                                     serverChannelFuture.channel().close().addListener(future -> {
                                         if (future.isSuccess()) {
                                             //开始存量连接的迁移
+                                            System.out.println("老者完成迁移listener，开始存量连接的迁移");
                                             startFDTransferTask();
                                         }else {
                                             future.cause().printStackTrace();
@@ -299,8 +310,10 @@ public class Server {
                                 @Override
                                 public void channelActive(ChannelHandlerContext ctx) throws Exception {
                                     ctx.writeAndFlush(((EpollSocketChannel)channel).fd()).addListener(future -> {
-                                        if (!future.isSuccess()){
+                                        if (!future.isSuccess()) {
                                             future.cause().printStackTrace();
+                                        } else {
+                                            System.out.println("老连接发送成功：" + "oldChannelId:" + ((EpollSocketChannel)channel).fd());
                                         }
                                     });
                                 }
@@ -312,8 +325,9 @@ public class Server {
                                     String newChannelId = buf.toString(buf.readerIndex(), newChannelIdLength, StandardCharsets.UTF_8);
 
                                     oldChannelIdToNewChannelIdMap.put(channel.id().asLongText(), newChannelId);
-
+                                    System.out.println("老连接接收成功：" + "oldChannelId:" + ((EpollSocketChannel) channel).fd() + ", newChannelId:" + newChannelId);
                                     //迁移存量数据
+                                    System.out.println("开始迁移存量数据");
                                     startTransferReadData(channel);
 
                                     //FD已经迁移完，关闭用来迁移FD的连接
@@ -352,9 +366,10 @@ public class Server {
                                             //清理
                                             oldChannelIdToDataTransferChannelMap.remove(oldChannel.id().asLongText());
                                             oldChannelIdToNewChannelIdMap.remove(oldChannel.id().asLongText());
-
+                                            System.out.println("老者的oldChannel:" + oldChannel.id().asLongText() + " 剩余数据迁移完成");
                                             if (oldChannelIdToDataTransferChannelMap.size() == 0){
                                                 //完成迁移，退出老进程
+                                                System.out.println("老者完成所有channel的迁移，关机下线");
                                                 System.exit(1);
                                             }
                                         }else {

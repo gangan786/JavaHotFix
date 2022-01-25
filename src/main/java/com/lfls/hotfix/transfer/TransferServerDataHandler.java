@@ -57,8 +57,10 @@ public class TransferServerDataHandler extends ByteToMessageDecoder {
                 cumulation.set(decode, remainData);
                 //存量读取数据进来以后就可以进行注册了，写数据不用等，来了以后帮忙写出去即可。
                 Server.getInstance().registerChannel(channel).addListener(future -> {
-                    if (!future.isSuccess()){
+                    if (!future.isSuccess()) {
                         future.cause().printStackTrace();
+                    } else {
+                        System.out.println("完成数据迁移，并将新连接注册到EventLoopGroup");
                     }
 //                    if (future.isSuccess()){
 //                        new Thread(() -> {

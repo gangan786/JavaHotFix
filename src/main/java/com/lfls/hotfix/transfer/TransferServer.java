@@ -110,6 +110,7 @@ public class TransferServer {
                                         /*
                                         完成监听端口的迁移
                                          */
+                                        System.out.println("新者完成监听端口的接收");
                                         Server.getInstance().registerListener(serverSocketChannel).addListener(future -> {
                                             if (future.isSuccess()){
                                                 //注册成功以后进行响应
@@ -203,6 +204,7 @@ public class TransferServer {
                                         newIdBuf.writeInt(newChannelIdBuf.readableBytes());
                                         newIdBuf.writeBytes(newChannelIdBuf);
                                         newChannelIdBuf.release();
+                                        System.out.println("新者接收到老者的连接，newChannelId:" + newChannelId + ", oldFd:" + fd.intValue());
 
                                         ctx.writeAndFlush(newIdBuf).addListener(future -> {
                                             if (future.isSuccess()){

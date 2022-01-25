@@ -17,7 +17,7 @@ public class Client {
 
     public void start() throws Exception {
         EventLoopGroup workerGroup = new NioEventLoopGroup();
-        int count = 100;
+        int count = 50;
 
         for (int i = 0; i < count; i++){
             Bootstrap b = new Bootstrap();
