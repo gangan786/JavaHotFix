@@ -388,9 +388,9 @@ public class Server {
         });
     }
 
-    public ChannelFuture registerListener(Channel listener){
+    public ChannelFuture registerBossChannel(Channel channel){
         assert serverChannelFuture == null;
-        serverChannelFuture = bossGroup.register(listener);
+        serverChannelFuture = bossGroup.register(channel);
         return serverChannelFuture;
     }
 

@@ -111,7 +111,7 @@ public class TransferServer {
                                         完成监听端口的迁移
                                          */
                                         System.out.println("新者完成监听端口的接收");
-                                        Server.getInstance().registerListener(serverSocketChannel).addListener(future -> {
+                                        Server.getInstance().registerBossChannel(serverSocketChannel).addListener(future -> {
                                             if (future.isSuccess()){
                                                 //注册成功以后进行响应
                                                 /*
