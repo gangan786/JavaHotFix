@@ -309,6 +309,13 @@ public class Server {
                             .handler(new ChannelInboundHandlerAdapter(){
                                 @Override
                                 public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                    /**
+                                     * 套接字就是一个数字，调用socket函数时，就能够生成（返回）这样一个数字。
+                                     * 该数字 具有唯一性，操作系统保证，该数字一旦被某个程序调用socket函数返回，
+                                     * 就一直给这个程 序用，直到该程序调用close函数关闭对该数字的调用，
+                                     * 该数字才被系统回收（回收后如果 该程序或其他程序又调用了socket函数，该数字可以给该程序或者其他程序复用)。
+                                     * 只要 该数字没有被系统回收，不管哪个程序调用'socket函数，都不可能返回一个和该数字一样 的数字，这就是唯一性。
+                                     */
                                     ctx.writeAndFlush(((EpollSocketChannel)channel).fd()).addListener(future -> {
                                         if (!future.isSuccess()) {
                                             future.cause().printStackTrace();
