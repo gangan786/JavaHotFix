@@ -310,11 +310,17 @@ public class Server {
                                 @Override
                                 public void channelActive(ChannelHandlerContext ctx) throws Exception {
                                     /**
+                                     * 以下说法是错误的，并不能解释为什么仅仅通过fd就能迁移连接
                                      * 套接字就是一个数字，调用socket函数时，就能够生成（返回）这样一个数字。
                                      * 该数字 具有唯一性，操作系统保证，该数字一旦被某个程序调用socket函数返回，
                                      * 就一直给这个程 序用，直到该程序调用close函数关闭对该数字的调用，
                                      * 该数字才被系统回收（回收后如果 该程序或其他程序又调用了socket函数，该数字可以给该程序或者其他程序复用)。
                                      * 只要 该数字没有被系统回收，不管哪个程序调用'socket函数，都不可能返回一个和该数字一样 的数字，这就是唯一性。
+                                     *
+                                     *
+                                     * 针对上述说法的错误，合理的解释是：连接迁移使用的是一种高级进程间通信：Unix Domain Socket
+                                     * 摘抄《Unix环境高级编程》 --> 在技术上，我们是将指向一个打开文件表项的指针从一个进程发送到另外一个进程。该指针 被分配存放在接收进程的第一个可用描述符项中。（注意，不要造成错觉，以为发送进程和接收 进程中的描述符编号是相同的，它们通常是不同的。）两个进程共享同一个打开文件表，这与fork 之后的父进程和子进程共享打开文件表的情祝完全相同（见图8-2）。
+                                     * Unix 实现原理可参考论文：《Zero Downtime Release: Disruption-free Load Balancing of a Multi-Billion User Website》（https://dl.acm.org/doi/abs/10.1145/3387514.3405885）
                                      */
                                     ctx.writeAndFlush(((EpollSocketChannel)channel).fd()).addListener(future -> {
                                         if (!future.isSuccess()) {
